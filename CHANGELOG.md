@@ -13,6 +13,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 * In [filesets or path patterns](docs/filesets.md#file-patterns), glob matching
   is enabled by default. You can use `cwd:"path"` to match literal paths.
 
+* The minimum supported Rust version (MSRV) is now 1.89.
+
 ### Deprecations
 
 * The `--destination`/`-d` arguments for `jj rebase`, `jj split`, `jj revert`,
