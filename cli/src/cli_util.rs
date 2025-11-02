@@ -2895,7 +2895,7 @@ pub fn has_tracked_remote_bookmarks(repo: &dyn Repo, bookmark: &RefName) -> bool
     };
     repo.view()
         .remote_bookmarks_matching(&StringMatcher::exact(bookmark), &remote_matcher)
-        .any(|(_, remote_ref)| remote_ref.is_tracked())
+        .any(|(_, remote_ref)| remote_ref.is_tracked() && remote_ref.is_present())
 }
 
 pub fn load_template_aliases(
