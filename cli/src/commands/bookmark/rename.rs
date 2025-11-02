@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use clap_complete::ArgValueCandidates;
+use itertools::Itertools as _;
 use jj_lib::op_store::RefTarget;
 use jj_lib::ref_name::RefNameBuf;
+use jj_lib::str_util::StringMatcher;
 
 use crate::cli_util::CommandHelper;
 use crate::cli_util::has_tracked_remote_bookmarks;
@@ -70,6 +74,42 @@ pub fn cmd_bookmark_rename(
         .set_local_bookmark_target(new_bookmark, ref_target);
     tx.repo_mut()
         .set_local_bookmark_target(old_bookmark, RefTarget::absent());
+    {
+        // preserve tracking state of old bookmark
+        let old_tracked_remote_bookmarks = tx
+            .base_repo()
+            .view()
+            .remote_bookmarks_matching(&StringMatcher::exact(old_bookmark), &StringMatcher::all())
+            .filter(|(_, remote_ref)| remote_ref.is_tracked())
+            .map(|(symbol, _)| symbol.remote.to_owned())
+            .collect_vec();
+        let existing_untracked_remote_bookmarks = tx
+            .base_repo()
+            .view()
+            .remote_bookmarks_matching(&StringMatcher::exact(new_bookmark), &StringMatcher::all())
+            .filter(|(_, remote_ref)| !remote_ref.is_tracked())
+            .map(|(symbol, _)| symbol.remote.to_owned())
+            .collect::<HashSet<_>>();
+        for old_remote_bookmark in old_tracked_remote_bookmarks {
+            let new_remote_bookmark = new_bookmark.to_remote_symbol(&old_remote_bookmark);
+            if existing_untracked_remote_bookmarks.contains(new_remote_bookmark.remote) {
+                writeln!(
+                    ui.warning_default(),
+                    "The renamed bookmark already exists on the remote '{remote}', tracking state \
+                     was dropped.",
+                    remote = new_remote_bookmark.remote.as_str(),
+                )?;
+                writeln!(
+                    ui.hint_default(),
+                    "To track the existing remote bookmark, run `jj bookmark track \
+                     {new_remote_bookmark}`",
+                )?;
+                continue;
+            }
+            tx.repo_mut()
+                .track_remote_bookmark(new_bookmark.to_remote_symbol(&old_remote_bookmark))?;
+        }
+    }
     tx.finish(
         ui,
         format!(
